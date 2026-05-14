@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -8,7 +8,8 @@ using Microsoft.EntityFrameworkCore;
 using CetBookStore.Data;
 using CetBookStore.Models;
 using Microsoft.AspNetCore.Authorization;
-
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Processing;
 namespace CetBookStore.Controllers
 {
     public class BooksController : Controller
@@ -112,7 +113,7 @@ namespace CetBookStore.Controllers
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,Description,Author,Publisher,PageCount,Price,IsInSale,PreviousPrice,PublicationDate,CreatedDate,CategoryId")] Book book)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,Description,Author,Publisher,PageCount,Price,IsInSale,PreviousPrice,PublicationDate,CreatedDate,CategoryId,ImageUrl,ImageFile")] Book book)
         {
             if (id != book.Id)
             {
@@ -123,6 +124,35 @@ namespace CetBookStore.Controllers
             {
                 try
                 {
+                    if (book.ImageFile != null)
+                    {
+                        var fileExtension = Path.GetExtension(book.ImageFile.FileName);
+                        var newFileName = Guid.NewGuid().ToString("N") + fileExtension;
+                        var filePath = Path.Combine(_hostEnvironment.WebRootPath, "images", newFileName);
+                        
+                        using (var image = await Image.LoadAsync(book.ImageFile.OpenReadStream()))
+                        {
+                            if (image.Width > 1024)
+                            {
+                                int newWidth = 1024;
+                                int newHeight = (int)(image.Height * ((float)newWidth / image.Width));
+                                image.Mutate(x => x.Resize(newWidth, newHeight));
+                            }
+                            await image.SaveAsync(filePath);
+                        }
+
+                        if (!string.IsNullOrEmpty(book.ImageUrl))
+                        {
+                            var oldFilePath = Path.Combine(_hostEnvironment.WebRootPath, "images", book.ImageUrl);
+                            if (System.IO.File.Exists(oldFilePath))
+                            {
+                                System.IO.File.Delete(oldFilePath);
+                            }
+                        }
+
+                        book.ImageUrl = newFileName;
+                    }
+
                     _context.Update(book);
                     await _context.SaveChangesAsync();
                 }
